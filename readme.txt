@@ -3,21 +3,24 @@ Contributors: sasiddiqui
 Tags: blocks, gutenberg, debug, block editor
 Requires at least: 6.0
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Shows which blocks are used on which posts, including blocks that are no longer registered.
+Shows which blocks are used on which posts, templates and patterns, including blocks that are no longer registered.
 
 == Description ==
 
 Block Usage Finder adds a **Tools > Block Usage** page for debugging block content.
 
-* Scan one post type at a time, with a multi-select post status filter.
-* Filter by block name.
+* Scan one post type or all of them, with a multi-select post status filter.
+* Includes patterns, navigation menus, templates and template parts. Templates and template parts are listed only when they have been customized and saved in the database.
 * Show only blocks that are not registered, to find content left behind by removed plugins or themes.
 * Optionally include core blocks.
+* Filter by block name, sort by name, number of posts or total uses, and group by namespace.
 * See which posts use each block, how many times, with edit links. Nested blocks are counted.
+* Export the results as a CSV file.
+* The scan runs in batches with a Stop button, so large sites do not time out.
 * Nothing is cached or stored.
 
 == Installation ==
@@ -27,6 +30,14 @@ Block Usage Finder adds a **Tools > Block Usage** page for debugging block conte
 3. Go to Tools > Block Usage.
 
 == Changelog ==
+
+= 1.1.0 =
+* Scan all post types at once.
+* Include templates, template parts and navigation menus.
+* Scan in batches with progress and a Stop button.
+* Filter, sort and group the results without rescanning.
+* Collapse long post lists and show totals.
+* Export results as CSV.
 
 = 1.0.0 =
 * Initial release.

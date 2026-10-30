@@ -6,11 +6,15 @@ Find it under **Tools > Block Usage**.
 
 ## Features
 
-- Scan one post type at a time, with a multi-select post status filter (published, draft, private and so on).
-- Filter by block name, for example `acf/` or `my-plugin/hero`.
+- Scan one post type or all of them, with a multi-select post status filter (published, draft, private and so on).
+- Includes patterns (synced patterns), navigation menus, templates and template parts. Templates and template parts are listed only when they have been customized and saved in the database.
 - Show only blocks that are not registered, to find content left behind by removed plugins or themes.
 - Optionally include core blocks, which are hidden by default.
-- Each block lists the posts that use it, how many times, and an edit link.
+- Filter by block name, sort by name, number of posts or total uses, and group by namespace. These work on the finished scan, with no rescan.
+- Each block lists the posts that use it, how many times, and an edit link. Long lists are collapsed.
+- A totals row shows how many blocks are listed and how many are not registered.
+- Export the listed results as a CSV file, one row per block and post.
+- The scan runs in batches of 100 posts with a progress message and a Stop button, so large sites do not time out.
 - Nested blocks are counted.
 - Nothing is cached or stored. Each scan reads the current content, and no options are saved.
 
