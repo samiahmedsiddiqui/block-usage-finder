@@ -3,7 +3,7 @@ Contributors: sasiddiqui
 Tags: blocks, gutenberg, debug, block editor
 Requires at least: 6.0
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,7 +22,8 @@ Block Usage Finder adds a **Tools > Block Usage** page for debugging block conte
 * Export the results as a CSV file.
 * The scan runs in batches with a Stop button, so large sites do not time out.
 * A WP-CLI command, `wp block-usage-finder scan`, for servers.
-* Nothing is cached or stored.
+* Scan results are not cached or stored.
+* Shows update notices from the plugin's GitHub releases. Disable them with `add_filter( 'block_usage_check_updates', '__return_false' );`.
 
 == Installation ==
 
@@ -32,14 +33,10 @@ Block Usage Finder adds a **Tools > Block Usage** page for debugging block conte
 
 == Changelog ==
 
-= 1.1.0 =
-* Scan all post types at once.
-* Include templates, template parts and navigation menus.
-* Scan in batches with progress and a Stop button.
-* Filter, sort and group the results without rescanning.
-* Collapse long post lists and show totals.
-* Export results as CSV.
-* Add a WP-CLI command: `wp block-usage-finder scan`.
-
 = 1.0.0 =
 * Initial release.
+* Scan one post type or all of them, with templates, template parts and navigation menus.
+* Scan in batches with progress and a Stop button.
+* Filter, sort and group the results, collapse long post lists and export CSV.
+* WP-CLI command: `wp block-usage-finder scan`.
+* Update notices from the plugin's GitHub releases.
