@@ -22,6 +22,10 @@ defined( 'ABSPATH' ) || exit;
 define( 'BLOCK_USAGE_FINDER_VERSION', '1.1.0' );
 define( 'BLOCK_USAGE_FINDER_URL', plugin_dir_url( __FILE__ ) );
 
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require __DIR__ . '/includes/class-block-usage-cli.php';
+}
+
 /**
  * Add the Block Usage page under Tools.
  */

@@ -16,7 +16,17 @@ Find it under **Tools > Block Usage**.
 - Export the listed results as a CSV file, one row per block and post.
 - The scan runs in batches of 100 posts with a progress message and a Stop button, so large sites do not time out.
 - Nested blocks are counted.
+- A WP-CLI command for servers, see below.
 - Nothing is cached or stored. Each scan reads the current content, and no options are saved.
+
+## WP-CLI
+
+```bash
+wp block-usage-finder scan --only-missing
+wp block-usage-finder scan --post-type=page --status=publish,draft --block=acf/ --format=csv
+```
+
+Options: `--post-type` (a post type or `all`, the default), `--status` (comma-separated, default `publish`), `--block`, `--only-missing`, `--with-core` and `--format` (`table`, `csv`, `json`, `yaml` or `count`). It prints one row per block and post.
 
 ## Requirements
 

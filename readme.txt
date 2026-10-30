@@ -21,6 +21,7 @@ Block Usage Finder adds a **Tools > Block Usage** page for debugging block conte
 * See which posts use each block, how many times, with edit links. Nested blocks are counted.
 * Export the results as a CSV file.
 * The scan runs in batches with a Stop button, so large sites do not time out.
+* A WP-CLI command, `wp block-usage-finder scan`, for servers.
 * Nothing is cached or stored.
 
 == Installation ==
@@ -38,6 +39,7 @@ Block Usage Finder adds a **Tools > Block Usage** page for debugging block conte
 * Filter, sort and group the results without rescanning.
 * Collapse long post lists and show totals.
 * Export results as CSV.
+* Add a WP-CLI command: `wp block-usage-finder scan`.
 
 = 1.0.0 =
 * Initial release.
