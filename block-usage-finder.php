@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Block Usage Finder
  * Plugin URI:        https://github.com/samiahmedsiddiqui/block-usage-finder
- * Description:       Debugging tool under Tools that lists which blocks are used on which posts, including blocks that are no longer registered.
- * Version:           1.0.0
+ * Description:       Debugging tool under Tools that lists which blocks are used on which posts, templates and patterns, including blocks that are no longer registered.
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Sami Ahmed Siddiqui
@@ -18,6 +18,9 @@
  */
 
 defined( 'ABSPATH' ) || exit;
+
+define( 'BLOCK_USAGE_FINDER_VERSION', '1.1.0' );
+define( 'BLOCK_USAGE_FINDER_URL', plugin_dir_url( __FILE__ ) );
 
 /**
  * Add the Block Usage page under Tools.
@@ -36,12 +39,23 @@ add_action( 'admin_menu', 'block_usage_menu' );
 /**
  * Post types that can be scanned, keyed by name.
  *
+ * Includes the block theme types that are hidden from the admin menus.
+ *
  * @return string[] Post type name => label.
  */
 function block_usage_post_types() {
-	$types = array();
+	$types   = array();
+	$objects = get_post_types( array( 'show_ui' => true ), 'objects' );
 
-	foreach ( get_post_types( array( 'show_ui' => true ), 'objects' ) as $name => $object ) {
+	foreach ( array( 'wp_template', 'wp_template_part', 'wp_navigation' ) as $name ) {
+		$object = get_post_type_object( $name );
+
+		if ( $object ) {
+			$objects[ $name ] = $object;
+		}
+	}
+
+	foreach ( $objects as $name => $object ) {
 		if ( 'attachment' !== $name ) {
 			$types[ $name ] = $object->labels->name;
 		}
@@ -86,61 +100,133 @@ function block_usage_count( $blocks, &$counts ) {
 }
 
 /**
- * Scan posts and group the blocks they use.
+ * Scan one batch of posts and group the blocks they use.
  *
  * @param string   $post_type Post type to scan.
  * @param string[] $statuses  Post statuses to scan.
+ * @param int      $after     Only scan posts with an ID above this one.
+ * @param int      $limit     Maximum number of posts to read.
  *
  * @return array {
- *     @type int   $scanned Number of posts containing blocks.
- *     @type array $blocks  Block name => list of posts using it.
+ *     @type int   $scanned    Number of posts containing blocks in this batch.
+ *     @type int   $last       ID of the last post read, to pass as $after for the next batch.
+ *     @type bool  $done       Whether there are no more posts to read.
+ *     @type array $blocks     Block name => list of posts using it.
+ *     @type array $registered Block name => whether the block is registered.
  * }
  */
-function block_usage_scan( $post_type, $statuses ) {
+function block_usage_scan( $post_type, $statuses, $after, $limit ) {
 	global $wpdb;
 
 	$blocks       = array();
-	$scanned      = 0;
-	$last_id      = 0;
-	$batch        = 200;
-	$count        = $batch;
+	$registered   = array();
+	$registry     = WP_Block_Type_Registry::get_instance();
+	$last         = $after;
 	$like         = '%' . $wpdb->esc_like( '<!-- wp:' ) . '%';
 	$placeholders = implode( ', ', array_fill( 0, count( $statuses ), '%s' ) );
 	$sql          = "SELECT ID, post_title, post_status, post_content FROM {$wpdb->posts} WHERE post_type = %s AND post_status IN ( {$placeholders} ) AND post_content LIKE %s AND ID > %d ORDER BY ID ASC LIMIT %d";
 
-	while ( $count === $batch ) {
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
-		$rows = $wpdb->get_results(
-			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-			$wpdb->prepare( $sql, array_merge( array( $post_type ), $statuses, array( $like, $last_id, $batch ) ) )
-		);
-		$count = count( $rows );
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
+	$rows = $wpdb->get_results(
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->prepare( $sql, array_merge( array( $post_type ), $statuses, array( $like, $after, $limit ) ) )
+	);
 
-		foreach ( $rows as $row ) {
-			$last_id = (int) $row->ID;
-			$counts  = array();
-			++$scanned;
+	foreach ( $rows as $row ) {
+		$last   = (int) $row->ID;
+		$counts = array();
+		$link   = get_edit_post_link( $last, 'raw' );
 
-			block_usage_count( parse_blocks( $row->post_content ), $counts );
+		block_usage_count( parse_blocks( $row->post_content ), $counts );
 
-			foreach ( $counts as $name => $uses ) {
-				$blocks[ $name ][] = array(
-					'id'     => $last_id,
-					'title'  => $row->post_title,
-					'status' => $row->post_status,
-					'count'  => $uses,
-				);
+		foreach ( $counts as $name => $uses ) {
+			if ( ! isset( $registered[ $name ] ) ) {
+				$registered[ $name ] = $registry->is_registered( $name );
 			}
+
+			$blocks[ $name ][] = array(
+				'id'     => $last,
+				'title'  => $row->post_title,
+				'status' => $row->post_status,
+				'type'   => $post_type,
+				'count'  => $uses,
+				'link'   => $link ? $link : '',
+			);
 		}
 	}
 
-	ksort( $blocks );
-
 	return array(
-		'scanned' => $scanned,
-		'blocks'  => $blocks,
+		'scanned'    => count( $rows ),
+		'last'       => $last,
+		'done'       => count( $rows ) < $limit,
+		'blocks'     => $blocks,
+		'registered' => $registered,
 	);
 }
+
+/**
+ * Answer a scan request for one batch of posts.
+ */
+function block_usage_ajax_scan() {
+	check_ajax_referer( 'block_usage_scan', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( null, 403 );
+	}
+
+	$post_types = block_usage_post_types();
+	$statuses   = block_usage_statuses();
+	$post_type  = isset( $_POST['scan_type'] ) ? sanitize_key( wp_unslash( $_POST['scan_type'] ) ) : '';
+	$chosen     = isset( $_POST['statuses'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['statuses'] ) ) : array();
+	$after      = isset( $_POST['after'] ) ? absint( $_POST['after'] ) : 0;
+	$chosen     = array_values( array_intersect( $chosen, array_keys( $statuses ) ) );
+
+	if ( ! isset( $post_types[ $post_type ] ) || empty( $chosen ) ) {
+		wp_send_json_error( null, 400 );
+	}
+
+	wp_send_json_success( block_usage_scan( $post_type, $chosen, $after, 100 ) );
+}
+add_action( 'wp_ajax_block_usage_scan', 'block_usage_ajax_scan' );
+
+/**
+ * Load the scripts and styles on the Block Usage page only.
+ *
+ * @param string $hook Current admin page hook.
+ */
+function block_usage_assets( $hook ) {
+	if ( 'tools_page_block-usage-finder' !== $hook ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'block-usage-finder',
+		BLOCK_USAGE_FINDER_URL . 'assets/block-usage-finder.css',
+		array(),
+		BLOCK_USAGE_FINDER_VERSION
+	);
+
+	wp_enqueue_script(
+		'block-usage-finder',
+		BLOCK_USAGE_FINDER_URL . 'assets/block-usage-finder.js',
+		array( 'wp-i18n' ),
+		BLOCK_USAGE_FINDER_VERSION,
+		true
+	);
+
+	wp_set_script_translations( 'block-usage-finder', 'block-usage-finder' );
+
+	wp_localize_script(
+		'block-usage-finder',
+		'blockUsageFinder',
+		array(
+			'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+			'nonce'     => wp_create_nonce( 'block_usage_scan' ),
+			'postTypes' => block_usage_post_types(),
+		)
+	);
+}
+add_action( 'admin_enqueue_scripts', 'block_usage_assets' );
 
 /**
  * Render the Block Usage page.
@@ -152,177 +238,88 @@ function block_usage_page() {
 
 	$post_types = block_usage_post_types();
 	$statuses   = block_usage_statuses();
-
-	// phpcs:disable WordPress.Security.NonceVerification.Recommended
-	$submitted    = isset( $_GET['scan'] );
-	$post_type    = isset( $_GET['scan_type'] ) ? sanitize_key( wp_unslash( $_GET['scan_type'] ) ) : 'page';
-	$chosen       = isset( $_GET['statuses'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_GET['statuses'] ) ) : array( 'publish' );
-	$search       = isset( $_GET['block'] ) ? sanitize_text_field( wp_unslash( $_GET['block'] ) ) : '';
-	$only_missing = ! empty( $_GET['only_missing'] );
-	$with_core    = ! empty( $_GET['with_core'] );
-	// phpcs:enable WordPress.Security.NonceVerification.Recommended
-
-	if ( ! isset( $post_types[ $post_type ] ) ) {
-		$post_type = 'page';
-	}
-
-	$chosen = array_values( array_intersect( $chosen, array_keys( $statuses ) ) );
 	?>
-	<div class="wrap">
+	<div class="wrap block-usage">
 		<h1><?php esc_html_e( 'Block Usage', 'block-usage-finder' ); ?></h1>
 
-		<form method="get" action="<?php echo esc_url( admin_url( 'tools.php' ) ); ?>">
-			<input type="hidden" name="page" value="block-usage-finder">
-			<input type="hidden" name="scan" value="1">
-
+		<form id="bu-form">
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="bu-post-type"><?php esc_html_e( 'Post type', 'block-usage-finder' ); ?></label></th>
 					<td>
 						<select name="scan_type" id="bu-post-type">
+							<option value="__all"><?php esc_html_e( 'All post types', 'block-usage-finder' ); ?></option>
 							<?php foreach ( $post_types as $name => $label ) : ?>
-								<option value="<?php echo esc_attr( $name ); ?>" <?php selected( $post_type, $name ); ?>><?php echo esc_html( $label ); ?></option>
+								<option value="<?php echo esc_attr( $name ); ?>" <?php selected( 'page', $name ); ?>><?php echo esc_html( $label ); ?></option>
 							<?php endforeach; ?>
 						</select>
+						<p class="description"><?php esc_html_e( 'Templates and template parts are listed only when they have been customized and saved in the database.', 'block-usage-finder' ); ?></p>
 					</td>
 				</tr>
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Post status', 'block-usage-finder' ); ?></th>
 					<td>
 						<?php foreach ( $statuses as $name => $label ) : ?>
-							<label style="margin-right: 16px;">
-								<input type="checkbox" name="statuses[]" value="<?php echo esc_attr( $name ); ?>" <?php checked( in_array( $name, $chosen, true ) ); ?>>
+							<label class="block-usage__option">
+								<input type="checkbox" name="statuses[]" value="<?php echo esc_attr( $name ); ?>" <?php checked( 'publish', $name ); ?>>
 								<?php echo esc_html( $label ); ?>
 							</label>
 						<?php endforeach; ?>
 					</td>
 				</tr>
-				<tr>
-					<th scope="row"><label for="bu-block"><?php esc_html_e( 'Block name', 'block-usage-finder' ); ?></label></th>
-					<td>
-						<input type="text" name="block" id="bu-block" class="regular-text" value="<?php echo esc_attr( $search ); ?>" placeholder="namespace/block-name">
-						<p class="description"><?php esc_html_e( 'Optional. Show only blocks whose name contains this text.', 'block-usage-finder' ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Options', 'block-usage-finder' ); ?></th>
-					<td>
-						<label style="margin-right: 16px;">
-							<input type="checkbox" name="only_missing" value="1" <?php checked( $only_missing ); ?>>
-							<?php esc_html_e( 'Only blocks that are not registered', 'block-usage-finder' ); ?>
-						</label>
-						<label>
-							<input type="checkbox" name="with_core" value="1" <?php checked( $with_core ); ?>>
-							<?php esc_html_e( 'Include core blocks', 'block-usage-finder' ); ?>
-						</label>
-					</td>
-				</tr>
 			</table>
 
-			<?php submit_button( __( 'Scan', 'block-usage-finder' ), 'primary', '' ); ?>
+			<p class="submit">
+				<button type="submit" class="button button-primary" id="bu-scan"><?php esc_html_e( 'Scan', 'block-usage-finder' ); ?></button>
+				<button type="button" class="button" id="bu-stop" hidden><?php esc_html_e( 'Stop', 'block-usage-finder' ); ?></button>
+			</p>
 		</form>
 
-		<?php
-		if ( $submitted ) {
-			if ( empty( $chosen ) ) {
-				echo '<div class="notice notice-warning"><p>' . esc_html__( 'Select at least one post status.', 'block-usage-finder' ) . '</p></div>';
-			} else {
-				block_usage_results( $post_type, $chosen, $search, $only_missing, $with_core );
-			}
-		}
-		?>
+		<div id="bu-progress" class="block-usage__progress" hidden>
+			<progress id="bu-bar" max="100"></progress>
+			<span id="bu-status" role="status"></span>
+		</div>
+
+		<div id="bu-notice" role="alert"></div>
+
+		<div id="bu-results" hidden>
+			<p id="bu-summary"></p>
+
+			<div class="block-usage__filters">
+				<label>
+					<?php esc_html_e( 'Block name', 'block-usage-finder' ); ?>
+					<input type="search" id="bu-filter" placeholder="namespace/block-name">
+				</label>
+				<label>
+					<?php esc_html_e( 'Sort by', 'block-usage-finder' ); ?>
+					<select id="bu-sort">
+						<option value="name"><?php esc_html_e( 'Block name', 'block-usage-finder' ); ?></option>
+						<option value="posts"><?php esc_html_e( 'Number of posts', 'block-usage-finder' ); ?></option>
+						<option value="uses"><?php esc_html_e( 'Total uses', 'block-usage-finder' ); ?></option>
+					</select>
+				</label>
+				<label><input type="checkbox" id="bu-missing"> <?php esc_html_e( 'Only blocks that are not registered', 'block-usage-finder' ); ?></label>
+				<label><input type="checkbox" id="bu-core"> <?php esc_html_e( 'Include core blocks', 'block-usage-finder' ); ?></label>
+				<label><input type="checkbox" id="bu-group"> <?php esc_html_e( 'Group by namespace', 'block-usage-finder' ); ?></label>
+				<button type="button" class="button" id="bu-export"><?php esc_html_e( 'Export CSV', 'block-usage-finder' ); ?></button>
+			</div>
+
+			<table class="widefat striped">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Block', 'block-usage-finder' ); ?></th>
+						<th><?php esc_html_e( 'Registered', 'block-usage-finder' ); ?></th>
+						<th><?php esc_html_e( 'Used on', 'block-usage-finder' ); ?></th>
+					</tr>
+				</thead>
+				<tbody id="bu-rows"></tbody>
+				<tfoot>
+					<tr>
+						<th colspan="3" id="bu-totals"></th>
+					</tr>
+				</tfoot>
+			</table>
+		</div>
 	</div>
-	<?php
-}
-
-/**
- * Render the scan results table.
- *
- * @param string   $post_type    Post type to scan.
- * @param string[] $statuses     Post statuses to scan.
- * @param string   $search       Block name filter.
- * @param bool     $only_missing Show only unregistered blocks.
- * @param bool     $with_core    Include core blocks.
- */
-function block_usage_results( $post_type, $statuses, $search, $only_missing, $with_core ) {
-	$result   = block_usage_scan( $post_type, $statuses );
-	$registry = WP_Block_Type_Registry::get_instance();
-	$rows     = 0;
-
-	printf(
-		'<p>%s</p>',
-		esc_html(
-			sprintf(
-				/* translators: %d: number of posts. */
-				_n( '%d post with blocks scanned.', '%d posts with blocks scanned.', $result['scanned'], 'block-usage-finder' ),
-				$result['scanned']
-			)
-		)
-	);
-	?>
-	<table class="widefat striped">
-		<thead>
-			<tr>
-				<th><?php esc_html_e( 'Block', 'block-usage-finder' ); ?></th>
-				<th><?php esc_html_e( 'Registered', 'block-usage-finder' ); ?></th>
-				<th><?php esc_html_e( 'Used on', 'block-usage-finder' ); ?></th>
-			</tr>
-		</thead>
-		<tbody>
-			<?php
-			foreach ( $result['blocks'] as $name => $posts ) {
-				$registered = $registry->is_registered( $name );
-
-				if ( ( ! $with_core && 0 === strpos( $name, 'core/' ) )
-					|| ( $only_missing && $registered )
-					|| ( '' !== $search && false === stripos( $name, $search ) ) ) {
-					continue;
-				}
-
-				++$rows;
-				?>
-				<tr>
-					<td><code><?php echo esc_html( $name ); ?></code></td>
-					<td>
-						<?php if ( $registered ) : ?>
-							<?php esc_html_e( 'Yes', 'block-usage-finder' ); ?>
-						<?php else : ?>
-							<strong style="color: #b32d2e;"><?php esc_html_e( 'Missing', 'block-usage-finder' ); ?></strong>
-						<?php endif; ?>
-					</td>
-					<td>
-						<?php
-						/* translators: %d: number of posts. */
-						echo esc_html( sprintf( _n( '%d post', '%d posts', count( $posts ), 'block-usage-finder' ), count( $posts ) ) );
-						?>
-						<ul style="margin: 6px 0 0 18px; list-style: disc;">
-							<?php foreach ( $posts as $post ) : ?>
-								<?php
-								$title = '' !== $post['title'] ? $post['title'] : __( '(no title)', 'block-usage-finder' );
-								$link  = get_edit_post_link( $post['id'] );
-								?>
-								<li>
-									<?php if ( $link ) : ?>
-										<a href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $title ); ?></a>
-									<?php else : ?>
-										<?php echo esc_html( $title ); ?>
-									<?php endif; ?>
-									<span class="description">
-										<?php echo esc_html( sprintf( '#%d, %s, x%d', $post['id'], $post['status'], $post['count'] ) ); ?>
-									</span>
-								</li>
-							<?php endforeach; ?>
-						</ul>
-					</td>
-				</tr>
-				<?php
-			}
-
-			if ( 0 === $rows ) :
-				?>
-				<tr><td colspan="3"><?php esc_html_e( 'No blocks found.', 'block-usage-finder' ); ?></td></tr>
-			<?php endif; ?>
-		</tbody>
-	</table>
 	<?php
 }
