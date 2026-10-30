@@ -1,0 +1,35 @@
+{
+	"name": "yasglobal/block-usage-finder",
+	"description": "Lists which blocks are used on which posts, including blocks that are no longer registered.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"keywords": [ "wordpress", "plugin", "gutenberg", "blocks", "debug" ],
+	"authors": [
+		{
+			"name": "Sami Ahmed Siddiqui"
+		}
+	],
+	"support": {
+		"issues": "https://github.com/samiahmedsiddiqui/block-usage-finder/issues",
+		"source": "https://github.com/samiahmedsiddiqui/block-usage-finder"
+	},
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+		"phpcompatibility/phpcompatibility-wp": "^2.1",
+		"wp-coding-standards/wpcs": "^3.0"
+	},
+	"prefer-stable": true,
+	"config": {
+		"sort-packages": true,
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	},
+	"scripts": {
+		"format": "phpcbf",
+		"lint": "phpcs"
+	}
+}
