@@ -16,7 +16,18 @@ Find it under **Tools > Block Usage**.
 - Export the listed results as a CSV file, one row per block and post.
 - The scan runs in batches of 100 posts with a progress message and a Stop button, so large sites do not time out.
 - Nested blocks are counted.
-- Nothing is cached or stored. Each scan reads the current content, and no options are saved.
+- A WP-CLI command for servers, see below.
+- Scan results are not cached or stored. Each scan reads the current content, and no options are saved.
+- Update notices on the Plugins page come from this repository's releases.
+
+## WP-CLI
+
+```bash
+wp block-usage-finder scan --only-missing
+wp block-usage-finder scan --post-type=page --status=publish,draft --block=acf/ --format=csv
+```
+
+Options: `--post-type` (a post type or `all`, the default), `--status` (comma-separated, default `publish`), `--block`, `--only-missing`, `--with-core` and `--format` (`table`, `csv`, `json`, `yaml` or `count`). It prints one row per block and post.
 
 ## Requirements
 
@@ -31,11 +42,21 @@ Find it under **Tools > Block Usage**.
 
 The folder inside the zip must be named `block-usage-finder`. Do not use the green **Code > Download ZIP** button, because it names the folder `block-usage-finder-main`.
 
-## Updates from GitHub
+## Updates
 
-The plugin header supports [Git Updater](https://git-updater.com/). With Git Updater installed, you can install the plugin from this repository's URL and it will show updates when a new release is published.
+The plugin checks this repository's latest release through WordPress's normal update check, so a new release shows as an update on the **Plugins** page, with one-click and automatic updates. The check is a request to the GitHub API, made when WordPress checks for plugin updates.
 
-Without Git Updater, download the new release zip and upload it over the old one.
+To turn it off:
+
+```php
+add_filter( 'block_usage_check_updates', '__return_false' );
+```
+
+To update with WP-CLI:
+
+```bash
+wp plugin install https://github.com/samiahmedsiddiqui/block-usage-finder/releases/latest/download/block-usage-finder.zip --force
+```
 
 ## Development
 

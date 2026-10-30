@@ -3,7 +3,7 @@
  * Plugin Name:       Block Usage Finder
  * Plugin URI:        https://github.com/samiahmedsiddiqui/block-usage-finder
  * Description:       Debugging tool under Tools that lists which blocks are used on which posts, templates and patterns, including blocks that are no longer registered.
- * Version:           1.1.0
+ * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Sami Ahmed Siddiqui
@@ -11,16 +11,21 @@
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       block-usage-finder
- * GitHub Plugin URI: samiahmedsiddiqui/block-usage-finder
- * Primary Branch:    main
+ * Update URI:        https://github.com/samiahmedsiddiqui/block-usage-finder
  *
  * @package block-usage-finder
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'BLOCK_USAGE_FINDER_VERSION', '1.1.0' );
+define( 'BLOCK_USAGE_FINDER_VERSION', '1.0.0' );
 define( 'BLOCK_USAGE_FINDER_URL', plugin_dir_url( __FILE__ ) );
+
+require __DIR__ . '/includes/class-block-usage-updater.php';
+
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require __DIR__ . '/includes/class-block-usage-cli.php';
+}
 
 /**
  * Add the Block Usage page under Tools.
