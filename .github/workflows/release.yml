@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions: {}
+
+jobs:
+  release:
+    name: Build zip and publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check the tag matches the plugin version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          header=$(sed -n 's/^ \* Version: *//p' block-usage-finder.php | head -n 1)
+          constant=$(sed -n "s/^define( 'BLOCK_USAGE_FINDER_VERSION', '\(.*\)' );/\1/p" block-usage-finder.php)
+          if [ "v${header}" != "${TAG}" ] || [ "${constant}" != "${header}" ]; then
+            echo "Tag ${TAG}, plugin header ${header}, constant ${constant} do not match."
+            exit 1
+          fi
+
+      - name: Build the plugin zip
+        run: git archive --format=zip --prefix=block-usage-finder/ -o block-usage-finder.zip HEAD
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "${TAG}" block-usage-finder.zip --title "${TAG}" --generate-notes
